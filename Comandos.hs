@@ -40,7 +40,7 @@ move_varios _ _ = [] -- Listas com tamanhos diferentes
 
 -- 5. Função que verifica embates entre naves
 verifica_embates :: Estado -> [Estado] -> Bool
-verifica_embates (newLoc, _) = any (\(loc, _) -> loc == newLoc)
+verifica_embates (novaLocalizacao, _) = any (\(localizacao, _) -> localizacao == novaLocalizacao)
 
 
 
