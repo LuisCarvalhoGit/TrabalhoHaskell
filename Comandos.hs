@@ -14,8 +14,8 @@ module Comandos where
 type Coord = (Float, Float, Float)
 type Estado = (Coord, Bool)
 type Movimento = Coord
---type Nave = ([Movimento], String)  -- Lista de movimentos e 
---type ListaNaves = [(Nave, Estado)] -- List of (ship, initial state) pairs
+type Nave = ([Movimento], String)  -- Lista de movimentos e ID da nave
+type ListaNaves = [(Nave, Estado)] -- Lista de pares de (Nave, Estado) 
 
 atualiza_acao :: (Bool, Estado) -> Estado
 atualiza_acao (acao, (coord, _)) = (coord, acao)
@@ -30,3 +30,9 @@ move (dx, dy, dz) ((x, y, z), ligado)
 move_lista :: [Movimento] -> Estado -> Estado
 move_lista [] estado = estado
 move_lista (m : ms) estado = move_lista ms (move m estado)
+
+
+move_varios :: [Nave] -> [Estado] -> [(Estado, String)]
+move_varios [] [] = [] -- Caso base
+move_varios ((movs, id):naves) (estado:estados) = (move_lista movs estado, id) : move_varios naves estados
+move_varios _ _ = [] -- Listas com tamanhos diferentes
