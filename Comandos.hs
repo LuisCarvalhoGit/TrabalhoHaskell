@@ -19,7 +19,7 @@ type ListaNaves = [(Nave, Estado)] -- Lista de pares de (Nave, Estado)
 
 atualiza_acao :: (Bool, Estado) -> Estado
 atualiza_acao (acao, (coord, _)) = (coord, acao)
-    
+
 
 move :: Movimento -> Estado -> Estado
 move (dx, dy, dz) ((x, y, z), ligado)
@@ -36,3 +36,13 @@ move_varios :: [Nave] -> [Estado] -> [(Estado, String)]
 move_varios [] [] = [] -- Caso base
 move_varios ((movs, id):naves) (estado:estados) = (move_lista movs estado, id) : move_varios naves estados
 move_varios _ _ = [] -- Listas com tamanhos diferentes
+
+
+-- 5. Função que verifica embates entre naves
+verifica_embates :: Estado -> [Estado] -> Bool
+verifica_embates (newLoc, _) = any (\(loc, _) -> loc == newLoc)
+
+
+-- 6. Atualização da função move_varios
+move_varios_update :: [Nave] -> [Estado] -> [(Estado, String)]
+move_varios_update naves estados = filter (\(est, _) -> not (verifica_embates estado estados)) (move_varios naves estados)
