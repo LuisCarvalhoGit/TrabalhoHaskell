@@ -43,6 +43,6 @@ verifica_embates :: Estado -> [Estado] -> Bool
 verifica_embates (newLoc, _) = any (\(loc, _) -> loc == newLoc)
 
 
--- 6. Atualização da função move_varios
-move_varios_update :: [Nave] -> [Estado] -> [(Estado, String)]
-move_varios_update naves estados = filter (\(est, _) -> not (verifica_embates estado estados)) (move_varios naves estados)
+
+
+
