@@ -43,6 +43,16 @@ verifica_embates :: Estado -> [Estado] -> Bool
 verifica_embates (novaLocalizacao, _) = any (\(localizacao, _) -> localizacao == novaLocalizacao)
 
 
+--  6.Crie uma nova versão, atualizada, da função move_varios que apenas move uma nave caso esse movimento não origine um embate.
 
+move_varios_atualizado :: [Nave] -> [Estado] -> [(Estado, String)]
+move_varios_atualizado [] [] = [] -- Caso base
+move_varios_atualizado ((movs, id):naves) (estado:estados) = 
+    let novoEstado = move_lista movs estado
+        embate = verifica_embates (fst novoEstado) (map fst (naves ++ estados))
+    in if embate
+       then (estado, id) : move_varios naves estados -- Não move a nave se houver embate
+       else (novoEstado, id) : move_varios naves estados
+move_varios_atualizado _ _ = [] -- Listas com tamanhos diferentes
 
 
