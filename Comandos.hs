@@ -53,8 +53,11 @@ verifica_embates (loc1, _) ((loc2, _) : estados)
 move_varios_atualizado :: [Nave] -> [Estado] -> [(Estado, String)]
 move_varios_atualizado [] [] = [] -- Caso base
 move_varios_atualizado ((movs, id) : naves) (estado : estados) =
-    let novoEstado = move_lista movs estado
-     in if verifica_embates novoEstado estados
-            then (estado, id) : move_varios_atualizado naves estados -- Não move a nave se houver embate
-            else (novoEstado, id) : move_varios_atualizado naves estados -- Move a nave se não houver embate
+    let resultadoPrevio = move_varios_atualizado naves estados -- Processar o restante das naves recursivamente
+        estadosFinais = map fst resultadoPrevio -- Extrair estados finais das naves após mover
+        novoEstado = move_lista movs estado
+        
+    in if verifica_embates novoEstado estadosFinais
+        then (estado, id) : resultadoPrevio -- Não move a nave se houver embate
+        else (novoEstado, id) : resultadoPrevio -- Move a nave se não houver embate
 move_varios_atualizado _ _ = [] -- Listas com tamanhos diferentes
