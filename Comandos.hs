@@ -3,6 +3,7 @@
 {-# HLINT ignore "Use camelCase" #-}
 {-# HLINT ignore "Redundant ==" #-}
 {-# HLINT ignore "Use foldl" #-}
+{-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 
 module Comandos where
 
@@ -51,13 +52,13 @@ verifica_embates (loc1, _) ((loc2, _) : estados)
 -- 6. Versão atualizada de move_varios que evita embates
 
 move_varios_atualizado :: [Nave] -> [Estado] -> [(Estado, String)]
-move_varios_atualizado [] [] = [] -- Caso base
+move_varios_atualizado [] _ = [] -- Caso lista de Naves vazia
+move_varios_atualizado _ [] = [] -- Caso lista de Estados vazia
 move_varios_atualizado ((movs, id) : naves) (estado : estados) =
-    let resultadoPrevio = move_varios_atualizado naves estados -- Processar o restante das naves recursivamente
-        estadosFinais = map fst resultadoPrevio -- Extrair estados finais das naves após mover
+    let resultadoPrevio = move_varios_atualizado naves estados -- Processa o restante das naves recursivamente
+        estadosFinais = map fst resultadoPrevio -- Extrai os estados finais das naves após se moverem
         novoEstado = move_lista movs estado
-        
     in if verifica_embates novoEstado estadosFinais
-        then (estado, id) : resultadoPrevio -- Não move a nave se houver embate
-        else (novoEstado, id) : resultadoPrevio -- Move a nave se não houver embate
-move_varios_atualizado _ _ = [] -- Listas com tamanhos diferentes
+        then (estado, id) : resultadoPrevio -- Não move a nave se houver colisão
+        else (novoEstado, id) : resultadoPrevio -- Move a nave se não houver colisão
+move_varios_atualizado _ _ = [] -- Caso de listas com diferentes tamanhos
