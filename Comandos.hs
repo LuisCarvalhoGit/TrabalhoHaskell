@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
 {-# HLINT ignore "Use camelCase" #-}
 {-# HLINT ignore "Redundant ==" #-}
 {-# HLINT ignore "Use foldl" #-}
