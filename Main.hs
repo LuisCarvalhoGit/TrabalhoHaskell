@@ -2,60 +2,74 @@ module Main where
 
 import Comandos
 
--- Test helper function to display results
-runTest :: String -> Bool -> IO ()
-runTest name result = putStrLn $ name ++ ": " ++ if result then "PASSED" else "FAILED"
+-- Função auxiliar para imprimir resultados dos testes
+printResultado :: (Show a, Eq a) => String -> a -> a -> IO ()
+printResultado nomeTeste resultado esperado = do
+    putStrLn $ nomeTeste ++ ": " ++ if resultado == esperado then "Passou" else "Falhou"
+    putStrLn $ "  Resultado: " ++ show resultado
+    putStrLn $ "  Esperado: " ++ show esperado
 
--- Test Cases for move_varios_atualizado
+-- Testes para a função atualiza_acao
+testAtualizaAcao :: IO ()
+testAtualizaAcao = do
+    let estadoInicial = ((0, 0, 0), False)
+    let estadoEsperado1 = ((0, 0, 0), True)
+    let estadoEsperado2 = ((0, 0, 0), False)
+    printResultado "Testa ligar" (atualiza_acao ("ligar", estadoInicial) estadoInicial) estadoEsperado1
+    printResultado "Testa desligar" (atualiza_acao ("desligar", estadoInicial) estadoInicial) estadoEsperado2
+
+-- Testes para a função move
+testMove :: IO ()
+testMove = do
+    let estadoInicial = ((0, 0, 0), True)
+    let movimento = (1, 1, 1)
+    let estadoEsperado = ((1, 1, 1), True)
+    printResultado "Testa movimento com nave ligada" (move movimento estadoInicial) estadoEsperado
+    let estadoDesligado = ((0, 0, 0), False)
+    printResultado "Testa movimento com nave desligada" (move movimento estadoDesligado) estadoDesligado
+
+-- Testes para a função move_lista
+testMoveLista :: IO ()
+testMoveLista = do
+    let estadoInicial = ((0, 0, 0), True)
+    let movimentos = [(1, 1, 1), (2, 2, 2)]
+    let estadoEsperado = ((3, 3, 3), True)
+    printResultado "Testa lista de movimentos" (move_lista movimentos estadoInicial) estadoEsperado
+
+-- Testes para a função move_varios
+testMoveVarios :: IO ()
+testMoveVarios = do
+    let naves = [([(1, 1, 1)], "Nave1"), ([(2, 2, 2)], "Nave2")]
+    let estados = [((0, 0, 0), True), ((0, 0, 0), True)]
+    let estadosEsperados = [(((1, 1, 1), True), "Nave1"), (((2, 2, 2), True), "Nave2")]
+    printResultado "Testa mover várias naves" (move_varios naves estados) estadosEsperados
+
+-- Testes para a função verifica_embates
+testVerificaEmbates :: IO ()
+testVerificaEmbates = do
+    let estado = ((0, 0, 0), True)
+    let estados = [((0, 0, 0), True), ((1, 1, 1), True)]
+    printResultado "Testa embate verdadeiro" (verifica_embates estado estados) True
+    let estadosSemEmbate = [((1, 1, 1), True), ((2, 2, 2), True)]
+    printResultado "Testa embate falso" (verifica_embates estado estadosSemEmbate) False
+
+-- Testes para a função move_varios_atualizado
 testMoveVariosAtualizado :: IO ()
 testMoveVariosAtualizado = do
-    -- Test 1: Basic movement without collision
-    let nave1 = ([(1, 1, 1), (2, 2, 2)], "nave1")
-    let nave2 = ([(1, 0, 0), (0, 1, 0)], "nave2")
-    let estado1 = ((0, 0, 0), True)
-    let estado2 = ((0, 0, 0), True)
-    let result1 = move_varios_atualizado [nave1, nave2] [estado1, estado2]
-    let expected1 = [(((3, 3, 3), True), "nave1"), (((1, 1, 0), True), "nave2")]
-    runTest "Move Varios Atualizado - Basic Movement" (result1 == expected1)
+    let naves = [([(1, 1, 1)], "Nave1"), ([(1, 1, 1)], "Nave2")]
+    let estados = [((0, 0, 0), True), ((1, 1, 1), True)]
+    let estadosEsperados = [(((1, 1, 1), True), "Nave1"), (((2, 2, 2), True), "Nave2")]
+    printResultado "Testa mover várias naves sem colisão" (move_varios_atualizado naves estados) estadosEsperados
+    let navesComColisao = [([(1, 1, 1)], "Nave1"), ([(0, 0, 0)], "Nave2")]
+    let estadosEsperadosComColisao = [(((0, 0, 0), True), "Nave1"), (((1, 1, 1), True), "Nave2")]
+    printResultado "Testa mover várias naves com colisão" (move_varios_atualizado navesComColisao estados) estadosEsperadosComColisao
 
-    -- Test 2: Collision detection
-    let nave3 = ([(2, 2, 2)], "nave3")
-    let nave4 = ([(1, 1, 1)], "nave4")
-    let estado3 = ((0, 0, 0), True)
-    let estado4 = ((1, 1, 1), True)
-    let result2 = move_varios_atualizado [nave3, nave4] [estado3, estado4]
-    let expected2 = [(((0, 0, 0), True), "nave3"), (((1, 1, 1), True), "nave4")]
-    putStrLn $ "Result 2" ++ show result2
-    runTest "Move Varios Atualizado - Collision Detection" (result2 == expected2)
-
-    -- Test 3: Empty list of naves
-    let result3 = move_varios_atualizado [] [estado1, estado2]
-    let expected3 = []
-    runTest "Move Varios Atualizado - Empty Naves List" (result3 == expected3)
-
-    -- Test 4: Empty list of estados
-    let result4 = move_varios_atualizado [nave1, nave2] []
-    let expected4 = []
-    runTest "Move Varios Atualizado - Empty Estados List" (result4 == expected4)
-
-    -- Test 5: Different lengths of input lists
-    let result5 = move_varios_atualizado [nave1] [estado1, estado2]
-    putStrLn $ "Result5" ++ show result5
-    let expected5 = []
-    runTest "Move Varios Atualizado - Different Lengths" (result5 == expected5)
-
-    -- Test 6: Multiple naves with no collisions
-    let nave5 = ([(1, 1, 1)], "nave5")
-    let nave6 = ([(2, 2, 2)], "nave6")
-    let estado5 = ((0, 0, 0), True)
-    let estado6 = ((0, 0, 0), True)
-    let result6 = move_varios_atualizado [nave5, nave6] [estado5, estado6]
-    let expected6 = [(((1, 1, 1), True), "nave5"), (((2, 2, 2), True), "nave6")]
-    runTest "Move Varios Atualizado - Multiple Naves No Collisions" (result6 == expected6)
-
--- Main function to run all tests
+-- Função principal para executar todos os testes
 main :: IO ()
 main = do
-    putStrLn "Running tests..."
+    testAtualizaAcao
+    testMove
+    testMoveLista
+    testMoveVarios
+    testVerificaEmbates
     testMoveVariosAtualizado
-    putStrLn "Tests completed."
