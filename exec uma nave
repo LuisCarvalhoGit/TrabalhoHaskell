@@ -1,0 +1,16 @@
+--2. Executar uma nave
+execNave :: [Nave] -> IO [Nave]
+execNave nv = do
+    putStrLn "Introduza o ID da nave: "
+    nvID <- getLine
+    let selectedNave = filter (\nave -> getID nvID nave) nv
+    if null selectedNave
+        then putStrLn "Nave não encontrada!" >> return nv
+        else do
+            putStrLn $ "Nave encontrada: " ++ show (head selectedNave)
+            -- Aqui você pode adicionar mais ações para a nave encontrada
+            return nv
+
+--2.1 Escolher id da nave
+getID :: String -> Nave -> Bool
+getID id nave = id == naveID nave
