@@ -87,7 +87,7 @@ coletarMovimentos args =
 
 somarMovimentos :: [Posicao] -> Posicao
 somarMovimentos movimentos =
-    let (xs, ys, zs) = unzip3 movimentos
+    let (xs, ys, zs ) = unzip3 movimentos
      in (sum xs, sum ys, sum zs)
 
 -- Funções de validação
@@ -161,8 +161,8 @@ menuPrincipal = do
     putStr "Escolha uma opção: "
     readLn
 
-menuAcoes :: Nave -> IO Nave
-menuAcoes nave = do
+menuAcoes :: FilePath -> [Nave] -> Nave -> IO Nave
+menuAcoes caminho naves nave = do
     putStrLn "\n=== Menu de Ações ==="
     putStrLn "1. Ligar nave"
     putStrLn "2. Desligar nave"
@@ -177,6 +177,7 @@ menuAcoes nave = do
                 return nave
             Right naveAtualizada -> do
                 putStrLn "Nave ligada com sucesso!"
+                salvarNaves caminho (naveAtualizada : filter ((/= naveId naveAtualizada) . naveId) naves)
                 return naveAtualizada
         "2" -> case desligarNave nave of
             Left erro -> do
@@ -184,6 +185,7 @@ menuAcoes nave = do
                 return nave
             Right naveAtualizada -> do
                 putStrLn "Nave desligada com sucesso!"
+                salvarNaves caminho (naveAtualizada : filter ((/= naveId naveAtualizada) . naveId) naves)
                 return naveAtualizada
         "3" -> do
             putStrLn "Digite o movimento (x y z):"
@@ -195,14 +197,15 @@ menuAcoes nave = do
                         Left erro -> putStrLn erro >> return nave
                         Right naveAtualizada -> do
                             putStrLn "Movimento realizado com sucesso!"
+                            salvarNaves caminho (naveAtualizada : filter ((/= naveId naveAtualizada) . naveId) naves)
                             return naveAtualizada
                 _ -> putStrLn "Coordenadas inválidas!" >> return nave
         "4" -> return nave
         _ -> putStrLn "Opção inválida!" >> return nave
 
 -- Funções principais do programa
-executarAcoesUmaNave :: [Nave] -> IO [Nave]
-executarAcoesUmaNave naves = do
+executarAcoesUmaNave :: FilePath -> [Nave] -> IO [Nave]
+executarAcoesUmaNave caminho naves = do
     putStr "Escreva o ID da nave: "
     id <- getLine
     case find (\n -> naveId n == id) naves of
@@ -210,23 +213,23 @@ executarAcoesUmaNave naves = do
             putStrLn "Nave não encontrada!"
             return naves
         Just nave -> do
-            naveAtualizada <- menuAcoes nave
+            naveAtualizada <- menuAcoes caminho naves nave
             return $ map (\n -> if naveId n == id then naveAtualizada else n) naves
 
-executarAcoesTodasNaves :: [Nave] -> IO [Nave]
-executarAcoesTodasNaves naves = do
+executarAcoesTodasNaves :: FilePath -> [Nave] -> IO [Nave]
+executarAcoesTodasNaves caminho naves = do
     putStrLn "\nA executar ações para todas as naves..."
     foldM
         ( \navesAtuais nave -> do
             putStrLn $ "\nExecutando ações para nave " ++ naveId nave
-            naveAtualizada <- menuAcoes nave
+            naveAtualizada <- menuAcoes caminho naves nave
             return $ map (\n -> if naveId n == naveId nave then naveAtualizada else n) navesAtuais
         )
         naves
         naves
 
-entradaDireta :: [Nave] -> IO [Nave]
-entradaDireta naves = do
+entradaDireta :: FilePath -> [Nave] -> IO [Nave]
+entradaDireta caminho naves = do
     putStrLn "\nDigite o comando no formato: ID COMANDO PARAMETROS"
     putStrLn "Exemplo: nave1 ligar"
     putStrLn "        nave1 mover 10 20 30"
@@ -235,20 +238,22 @@ entradaDireta naves = do
     case palavras of
         (id : cmd : params) -> case find (\n -> naveId n == id) naves of
             Nothing -> putStrLn "Nave não encontrada!" >> return naves
-            Just nave -> processarComandoDireto nave cmd params naves
+            Just nave -> processarComandoDireto caminho nave cmd params naves
         _ -> putStrLn "Formato de comando inválido!" >> return naves
 
-processarComandoDireto :: Nave -> String -> [String] -> [Nave] -> IO [Nave]
-processarComandoDireto nave cmd params naves = case cmd of
+processarComandoDireto :: FilePath -> Nave -> String -> [String] -> [Nave] -> IO [Nave]
+processarComandoDireto caminho nave cmd params naves = case cmd of
     "ligar" -> case ligarNave nave of
         Left erro -> putStrLn erro >> return naves
         Right naveAtualizada -> do
             putStrLn "Nave ligada com sucesso!"
+            salvarNaves caminho (naveAtualizada : filter ((/= naveId naveAtualizada) . naveId) naves)
             return $ map (\n -> if naveId n == naveId nave then naveAtualizada else n) naves
     "desligar" -> case desligarNave nave of
         Left erro -> putStrLn erro >> return naves
         Right naveAtualizada -> do
             putStrLn "Nave desligada com sucesso!"
+            salvarNaves caminho (naveAtualizada : filter ((/= naveId naveAtualizada) . naveId) naves)
             return $ map (\n -> if naveId n == naveId nave then naveAtualizada else n) naves
     "mover" -> case params of
         [x, y, z] -> case (readMaybe x, readMaybe y, readMaybe z) of
@@ -257,6 +262,7 @@ processarComandoDireto nave cmd params naves = case cmd of
                     Left erro -> putStrLn erro >> return naves
                     Right naveAtualizada -> do
                         putStrLn "Movimento realizado com sucesso!"
+                        salvarNaves caminho (naveAtualizada : filter ((/= naveId naveAtualizada) . naveId) naves)
                         return $ map (\n -> if naveId n == naveId nave then naveAtualizada else n) naves
             _ -> putStrLn "Parâmetros de movimento inválidos!" >> return naves
         _ -> putStrLn "Número incorreto de parâmetros para movimento!" >> return naves
@@ -265,6 +271,7 @@ processarComandoDireto nave cmd params naves = case cmd of
             Just pos -> do 
                 let naveAtualizada = nave{posicao = pos, ligado = status == "1"}
                 putStrLn "Inicialização da nave realizada com sucesso!"
+                salvarNaves caminho (naveAtualizada : filter ((/= naveId naveAtualizada) . naveId) naves)
                 return $ map (\n -> if naveId n == naveId nave then naveAtualizada else n) naves
             Nothing -> putStrLn "Coordenadas inválidas para inicialização!" >> return naves
         _ -> putStrLn "Parâmetros insuficientes para inicialização!" >> return naves
@@ -273,6 +280,7 @@ processarComandoDireto nave cmd params naves = case cmd of
             (Just minPos, Just maxPos) -> do
                 let naveAtualizada = nave{espacoPermitido = (minPos, maxPos)}
                 putStrLn "Espaço permitido inicializado com sucesso!"
+                salvarNaves caminho (naveAtualizada : filter ((/= naveId naveAtualizada) . naveId) naves)
                 return $ map (\n -> if naveId n == naveId nave then naveAtualizada else n) naves
             _ -> putStrLn "Coordenadas inválidas para espaço permitido!" >> return naves
         _ -> putStrLn "Parâmetros insuficientes para espaço permitido!" >> return naves
@@ -281,35 +289,35 @@ processarComandoDireto nave cmd params naves = case cmd of
         return naves
 
 -- Loop principal do programa
-loopPrincipal :: [Nave] -> IO ()
-loopPrincipal naves = do
+loopPrincipal :: FilePath -> [Nave] -> IO ()
+loopPrincipal caminho naves = do
     opcao <- menuPrincipal
     case opcao of
         1 -> do
             putStrLn "\nListando todas as naves:"
             mapM_ mostrarNave naves
-            loopPrincipal naves
+            loopPrincipal caminho naves
         2 -> do
-            navesAtualizadas <- executarAcoesUmaNave naves
-            loopPrincipal navesAtualizadas
+            navesAtualizadas <- executarAcoesUmaNave caminho naves
+            loopPrincipal caminho navesAtualizadas
         3 -> do
-            navesAtualizadas <- executarAcoesTodasNaves naves
-            loopPrincipal navesAtualizadas
+            navesAtualizadas <- executarAcoesTodasNaves caminho naves
+            loopPrincipal caminho navesAtualizadas
         4 -> do
-            navesAtualizadas <- entradaDireta naves
-            loopPrincipal navesAtualizadas
+            navesAtualizadas <- entradaDireta caminho naves
+            loopPrincipal caminho navesAtualizadas
         5 -> do
             putStrLn "\nEncerrando o programa..."
         _ -> do
             putStrLn "Opção inválida!"
-            loopPrincipal naves
+            loopPrincipal caminho naves
 
 -- Programa principal
 main :: IO ()
 main = do
+    let caminho = "Alienship.txt"
     putStrLn "Carregando arquivo de naves..."
-    conteudo <- readFile "Alienship.txt"
+    conteudo <- readFile caminho
     let naves = parseNave conteudo
     putStrLn "Arquivo carregado com sucesso!"
-    loopPrincipal naves
-    putStrLn "O estado das naves foi restaurado ao original."  -- Mensagem ao sair
+    loopPrincipal caminho naves
