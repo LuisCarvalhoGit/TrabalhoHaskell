@@ -125,6 +125,22 @@ desligarNave nave =
         then Left "Erro: A nave já está desligada!"
         else Right nave{ligado = False}
 
+-- Função para salvar naves
+salvarNaves :: FilePath -> [Nave] -> IO ()
+salvarNaves caminho naves = do
+    let conteudo = unlines $ map formatarNave naves
+    writeFile caminho conteudo
+  where
+    formatarNave :: Nave -> String
+    formatarNave nave =
+        naveId nave ++ " " ++
+        "init (" ++ show (x, y, z) ++ ") " ++
+        (if ligado nave then "1" else "0") ++ " " ++
+        "initspace (" ++ show (minX, minY, minZ) ++ ") (" ++ show (maxX, maxY, maxZ) ++ ")"
+      where
+        (x, y, z) = posicao nave
+        ((minX, minY, minZ), (maxX, maxY, maxZ)) = espacoPermitido nave
+
 -- Interface com usuário
 mostrarNave :: Nave -> IO ()
 mostrarNave nave = do
@@ -246,7 +262,7 @@ processarComandoDireto nave cmd params naves = case cmd of
         _ -> putStrLn "Número incorreto de parâmetros para movimento!" >> return naves
     "init" -> case params of
         (posStr : status : rest) -> case lerCoordenadas posStr of
-            Just pos -> do
+            Just pos -> do 
                 let naveAtualizada = nave{posicao = pos, ligado = status == "1"}
                 putStrLn "Inicialização da nave realizada com sucesso!"
                 return $ map (\n -> if naveId n == naveId nave then naveAtualizada else n) naves
@@ -282,7 +298,8 @@ loopPrincipal naves = do
         4 -> do
             navesAtualizadas <- entradaDireta naves
             loopPrincipal navesAtualizadas
-        5 -> do putStrLn "\nEncerrando o programa..."
+        5 -> do
+            putStrLn "\nEncerrando o programa..."
         _ -> do
             putStrLn "Opção inválida!"
             loopPrincipal naves
@@ -295,3 +312,4 @@ main = do
     let naves = parseNave conteudo
     putStrLn "Arquivo carregado com sucesso!"
     loopPrincipal naves
+    putStrLn "O estado das naves foi restaurado ao original."  -- Mensagem ao sair
