@@ -1,11 +1,10 @@
---1. Função para listar todas as naves
-listarNaves :: [Nave] -> IO()
+-- 1. Função para listar todas as naves
+listarNaves :: [Nave] -> IO ()
 listarNaves naves = do
     putStrLn "\n=== Lista de naves ===\n"
     mapM_ imprimirNaves naves
-    return ()
 
---1.1 Imprimir o estado da nave
+-- 1.1 Imprimir o estado da nave
 imprimirNaves :: Nave -> IO ()
 imprimirNaves nave = do
     putStrLn "--- Estado Atual da Nave --- "

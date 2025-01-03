@@ -44,11 +44,10 @@ printInvalidLine :: String -> IO ()
 printInvalidLine line = putStrLn $ "Formato de linha inválido: " ++ line
 
 
--- Opções do menu
-data OpMenu = ListarTodas | ExecutarUma | ExecutarTodas | InputDireto | Sair deriving (Eq)
+
 
 -- Mostrar menu principal
-menuPrincipal :: IO OpMenu
+menuPrincipal :: IO ()
 menuPrincipal = do
     putStrLn "\n=== Menu de Controlo ==="
     putStrLn "\t1. Listar todas as naves"
@@ -59,12 +58,18 @@ menuPrincipal = do
     putStr "Introduza a sua escolha: "
     escolha <- getLine
     case escolha of
-        "1" -> return ListarTodas
-        "2" -> return ExecutarUma
-        "3" -> return ExecutarTodas
-        "4" -> return InputDireto
-        "5" -> return Sair
-        _   -> putStrLn "Escolha Inválida!" >> menuPrincipal
+        "1" -> do ListarTodas
+                  
+        "2" -> do ExecutarUma
+                  
+        "3" -> do ExecutarTodas
+                  
+        "4" -> do InputDireto
+
+        "5" -> do Sair
+                  
+        _   -> do putStrLn "Escolha Inválida!"
+                  menuPrincipal
 
 -- Listar todas as naves
 listarNaves :: [Nave] -> IO ()
@@ -213,14 +218,16 @@ mainLoop :: [Nave] -> IO ()
 mainLoop naves = do
     opcao <- menuPrincipal
     case opcao of
-        ListarTodas -> listarNaves naves >> mainLoop naves
+        ListarTodas -> do 
+                        listarNaves naves
+                        mainLoop naves
         ExecutarUma -> do
-            updated <- executarUma naves
-            mainLoop updated
+                        updated <- executarUma naves
+                        mainLoop updated
         ExecutarTodas -> do
-            updated <- executarTodas naves
-            mainLoop updated
+                        updated <- executarTodas naves
+                        mainLoop updated
         InputDireto -> do
-            updated <- inputDireto naves
-            mainLoop updated
+                        updated <- inputDireto naves
+                        mainLoop updated
         Sair -> putStrLn "A sair do programa. Adeus!"
