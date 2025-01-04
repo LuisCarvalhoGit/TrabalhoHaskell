@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 {-# HLINT ignore "Use <$>" #-}
+{-# HLINT ignore "Eta reduce" #-}
 module Main where
 
 import Control.Monad
@@ -23,7 +24,7 @@ data Nave = Nave
     deriving (Show, Eq)
 
 -- Estrutura para registrar comandos executados
-data Registro = Registro
+data Registo = Registo
     { comandosExecutados :: [(String, String, String, Posicao)] -- Lista de (ID da nave, comando, parâmetros, posição)
     , estadoFinal :: Nave -- Estado final da nave
     }
@@ -128,17 +129,13 @@ gravarNavesFicheiro caminho naves = do
     formatarNave nave =
         naveId nave
             ++ " init "
-            ++ "("
             ++ formatarPosicao (posicao nave)
-            ++ ") "
+            ++ " "
             ++ (if ligado nave then "1" else "0")
             ++ " initspace "
-            ++ "("
             ++ formatarPosicao posMin
-            ++ ") "
-            ++ "("
+            ++ " "
             ++ formatarPosicao posMax
-            ++ ")"
       where
         (posMin, posMax) = espacoPermitido nave
 
@@ -166,7 +163,7 @@ menuPrincipal = do
     return $ readMaybe input
 
 -- Menu de ações
-menuAcoes :: Nave -> Registro -> IO Registro
+menuAcoes :: Nave -> Registo -> IO Registo
 menuAcoes nave registro = do
     putStrLn "\n=== Menu de Ações ==="
     putStrLn "1. Ligar nave"
@@ -236,7 +233,7 @@ executarAcoesUmaNave naves = do
             putStrLn "Nave não encontrada!"
             return naves
         Just nave -> do
-            let registroInicial = Registro [] nave
+            let registroInicial = Registo [] nave
             registroAtualizado <- menuAcoes nave registroInicial
             return $ map (\n -> if naveId n == id then estadoFinal registroAtualizado else n) naves
 
@@ -247,7 +244,7 @@ executarAcoesTodasNaves naves = do
     foldM
         ( \navesAtuais nave -> do
             putStrLn $ "\nExecutando ações para nave " ++ naveId nave
-            let registroInicial = Registro [] nave
+            let registroInicial = Registo [] nave
             registroAtualizado <- menuAcoes nave registroInicial
             return $ map (\n -> if naveId n == naveId nave then estadoFinal registroAtualizado else n) navesAtuais
         )
@@ -266,7 +263,9 @@ entradaDireta naves = do
     putStrLn "\nInstruções introduzidas:"
     mapM_ (putStrLn . formatarComando) comandosIntroduzidos
 
-    return naves
+    -- Atualizar o estado das naves baseado nos comandos
+    let navesAtualizadas = executarComandos naves comandosIntroduzidos
+    return navesAtualizadas
   where
     loopEntrada :: [Nave] -> [(String, String, String, Posicao)] -> IO [(String, String, String, Posicao)]
     loopEntrada naves comandos = do
@@ -299,8 +298,7 @@ entradaDireta naves = do
                             putStrLn erro
                             loopEntrada naves comandos
                         Right naveAtualizada -> do
-                            let novaPosicaoFinal = posicao naveAtualizada
-                            let novoComando = (naveId nave, "mover", show (dx, dy, dz), novaPosicaoFinal)
+                            let novoComando = (naveId nave, "mover", show (dx, dy, dz), posicao naveAtualizada)
                             loopEntrada naves (novoComando : comandos)
                 _ -> do
                     putStrLn "Parâmetros de movimento inválidos!"
@@ -331,6 +329,35 @@ entradaDireta naves = do
 
     formatarComando (idNave, acao, params, estado) =
         idNave ++ " " ++ acao ++ " " ++ params ++ " posição " ++ show estado
+
+    executarComandos :: [Nave] -> [(String, String, String, Posicao)] -> [Nave]
+    executarComandos naves comandos =
+        foldl
+            ( \navesAtuais (id, cmd, params, _) ->
+                case find (\n -> naveId n == id) navesAtuais of
+                    Nothing -> navesAtuais -- Ignore if nave not found
+                    Just nave -> case cmd of
+                        "mover" -> case lerCoordenadas params of
+                            Just coords -> case validarMovimento nave coords of
+                                Right naveAtualizada -> atualizarNave navesAtuais naveAtualizada
+                                Left _ -> navesAtuais
+                            Nothing -> navesAtuais
+                        "acao" -> case params of
+                            "ligar" -> case ligarNave nave of
+                                Right naveAtualizada -> atualizarNave navesAtuais naveAtualizada
+                                Left _ -> navesAtuais
+                            "desligar" -> case desligarNave nave of
+                                Right naveAtualizada -> atualizarNave navesAtuais naveAtualizada
+                                Left _ -> navesAtuais
+                            _ -> navesAtuais
+                        _ -> navesAtuais
+            )
+            naves
+            comandos
+
+    atualizarNave :: [Nave] -> Nave -> [Nave]
+    atualizarNave naves naveAtualizada =
+        map (\n -> if naveId n == naveId naveAtualizada then naveAtualizada else n) naves
 
 -- Main program loop
 loopPrincipal :: [Nave] -> IO ()
