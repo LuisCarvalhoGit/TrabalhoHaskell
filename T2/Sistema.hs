@@ -43,7 +43,6 @@ lerCoordenadas str = do
 formatarPosicao :: Posicao -> String
 formatarPosicao (x, y, z) = "(" ++ show x ++ "," ++ show y ++ "," ++ show z ++ ")"
 
--- Parse das informações da nave a partir do conteúdo do arquivo
 parseNave :: String -> [Nave]
 parseNave conteudo = map parseLinha (lines conteudo)
   where
@@ -70,26 +69,24 @@ parseNave conteudo = map parseLinha (lines conteudo)
                             _ -> processarComandos nave rest
                     _ -> processarComandos nave args
                 "move" ->
-                    let summedCoords =
-                            foldl'
-                                ( \(sx, sy, sz) c -> case lerCoordenadas c of
-                                    Just (x, y, z) -> (sx + x, sy + y, sz + z)
-                                    Nothing -> (sx, sy, sz)
-                                )
-                                (0, 0, 0)
-                                args
-                     in case validarMovimento nave summedCoords of
-                            Right naveAtualizada -> naveAtualizada
-                            Left _ -> nave -- Retorna o estado atual da nave em caso de erro
+                    let processMovements naveAtual [] = naveAtual
+                        processMovements naveAtual (movimento : restoMovimentos) =
+                            case lerCoordenadas movimento of
+                                Just coords ->
+                                    case validarMovimento naveAtual coords of
+                                        Right naveNova -> processMovements naveNova restoMovimentos
+                                        Left _ -> processMovements naveAtual restoMovimentos -- Continue with next movement
+                                Nothing -> processMovements naveAtual restoMovimentos -- Continue with next movement
+                     in processMovements nave args
                 "acao" -> case args of
                     (acao : rest) ->
-                        let acaoLimpa = filter (/= ' ') acao -- Remove espaços adicionais
+                        let acaoLimpa = filter (`notElem` "()") acao
                          in case acaoLimpa of
                                 "ligar" -> nave{ligado = True}
                                 "desligar" -> nave{ligado = False}
                                 _ -> nave
-                    _ -> nave -- Não há ação válida
-                _ -> nave -- Para comandos desconhecidos, retornar o estado atual
+                    _ -> nave
+                _ -> nave
          in processarComandos updatedNave args
 
 -- Funções de validação de movimento

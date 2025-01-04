@@ -1,3 +1,2 @@
-oi98 init (10,1,1) 1 initspace (0,0,0) (100,100,100) move (1,1,1)
-oi99 init (1,10,1) 1 initspace (0,0,0) (100,100,100)
-oi97 init (1,1,10) 1 initspace (0,0,0) (100,100,100)
+oi98 init (10,1,1) 1 initspace (0,0,0) (155,1030,38) move (1,1,1) acao (desligar)
+AE12 init (10,1,1) 1 initspace (0,0,0) (155,1030,38) move (2,2,2) acao (desligar)
