@@ -1,5 +1,7 @@
-module Main where
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
+{-# HLINT ignore "Use <$>" #-}
+module Main where
 
 import Control.Monad
 import Data.List
@@ -7,19 +9,26 @@ import Data.Maybe
 import System.IO
 import Text.Read (readMaybe)
 
--- Tipos básicos
+-- Tipos básicos para representar posições de naves e espaço permitido
 type Posicao = (Int, Int, Int)
 type Espaco = (Posicao, Posicao)
 
--- Estrutura da nave
+-- Estrutura de dados principal para representar uma nave
 data Nave = Nave
-    { naveId :: String
-    , posicao :: Posicao
-    , ligado :: Bool
-    , espacoPermitido :: Espaco
+    { naveId :: String -- Identificador único da nave
+    , posicao :: Posicao -- Posição atual (x, y, z)
+    , ligado :: Bool -- Estado de energia (ligado/desligado)
+    , espacoPermitido :: Espaco -- Espaço de movimento permitido ((minX,minY,minZ), (maxX,maxY,maxZ))
     }
     deriving (Show, Eq)
 
+-- Estrutura para registrar comandos executados
+data Registro = Registro
+    { comandosExecutados :: [(String, String, String, Posicao)] -- Lista de (ID da nave, comando, parâmetros, posição)
+    , estadoFinal :: Nave -- Estado final da nave
+    }
+
+-- Parse das coordenadas do formato de string "(x,y,z)"
 lerCoordenadas :: String -> Maybe Posicao
 lerCoordenadas str = do
     let cleanStr = filter (`notElem` "()") str
@@ -30,6 +39,11 @@ lerCoordenadas str = do
             _ -> Nothing
         _ -> Nothing
 
+-- Formatar uma posição como string
+formatarPosicao :: Posicao -> String
+formatarPosicao (x, y, z) = "(" ++ show x ++ "," ++ show y ++ "," ++ show z ++ ")"
+
+-- Parse das informações da nave a partir do conteúdo do arquivo
 parseNave :: String -> [Nave]
 parseNave conteudo = map parseLinha (lines conteudo)
   where
@@ -40,56 +54,45 @@ parseNave conteudo = map parseLinha (lines conteudo)
     processarComandos :: Nave -> [String] -> Nave
     processarComandos nave [] = nave
     processarComandos nave (cmd : args) =
-        case cmd of
-            "init" -> case args of
-                (pos : status : rest) -> do
-                    case lerCoordenadas pos of
-                        Just posicaoInicial ->
-                            let naveAtualizada = nave{posicao = posicaoInicial, ligado = status == "1"}
-                             in processarComandos naveAtualizada rest
-                        Nothing -> processarComandos nave rest
-                _ -> processarComandos nave args
-            "initspace" -> case args of
-                (min : max : rest) ->
-                    case (lerCoordenadas min, lerCoordenadas max) of
-                        (Just minPos, Just maxPos) ->
-                            processarComandos (nave{espacoPermitido = (minPos, maxPos)}) rest
-                        _ -> processarComandos nave rest
-                _ -> processarComandos nave args
-            "move" ->
-                let (movimentos, restoArgs) = coletarMovimentos args
-                 in if null movimentos
-                        then processarComandos nave args
-                        else
-                            let somaPosicoes = somarMovimentos movimentos
-                                (x, y, z) = posicao nave
-                                (dx, dy, dz) = somaPosicoes
-                                novaPosicao = (x + dx, y + dy, z + dz)
-                                naveAtualizada = nave{posicao = novaPosicao}
-                             in processarComandos naveAtualizada restoArgs
-            "acao" -> case args of
-                (acao : rest) ->
-                    let acaoLimpa = filter (`notElem` "()") acao
-                     in case acaoLimpa of
-                            "ligar" -> processarComandos (nave{ligado = True}) rest
-                            "desligar" -> processarComandos (nave{ligado = False}) rest
+        let updatedNave = case cmd of
+                "init" -> case args of
+                    (pos : status : rest) ->
+                        case lerCoordenadas pos of
+                            Just posicaoInicial ->
+                                processarComandos (nave{posicao = posicaoInicial, ligado = status == "1"}) rest
+                            Nothing -> processarComandos nave rest
+                    _ -> processarComandos nave args
+                "initspace" -> case args of
+                    (min : max : rest) ->
+                        case (lerCoordenadas min, lerCoordenadas max) of
+                            (Just minPos, Just maxPos) ->
+                                processarComandos (nave{espacoPermitido = (minPos, maxPos)}) rest
                             _ -> processarComandos nave rest
-                _ -> processarComandos nave args
-            _ -> processarComandos nave args
+                    _ -> processarComandos nave args
+                "move" ->
+                    let summedCoords =
+                            foldl'
+                                ( \(sx, sy, sz) c -> case lerCoordenadas c of
+                                    Just (x, y, z) -> (sx + x, sy + y, sz + z)
+                                    Nothing -> (sx, sy, sz)
+                                )
+                                (0, 0, 0)
+                                args
+                     in case validarMovimento nave summedCoords of
+                            Right naveAtualizada -> naveAtualizada
+                            Left _ -> nave -- Retorna o estado atual da nave em caso de erro
+                "acao" -> case args of
+                    (acao : rest) ->
+                        let acaoLimpa = filter (/= ' ') acao -- Remove espaços adicionais
+                         in case acaoLimpa of
+                                "ligar" -> nave{ligado = True}
+                                "desligar" -> nave{ligado = False}
+                                _ -> nave
+                    _ -> nave -- Não há ação válida
+                _ -> nave -- Para comandos desconhecidos, retornar o estado atual
+         in processarComandos updatedNave args
 
-coletarMovimentos :: [String] -> ([Posicao], [String])
-coletarMovimentos [] = ([], [])
-coletarMovimentos args =
-    let (coords, rest) = span (\s -> "(" `isPrefixOf` s) args
-        posicoes = mapMaybe lerCoordenadas coords
-     in (posicoes, rest)
-
-somarMovimentos :: [Posicao] -> Posicao
-somarMovimentos movimentos =
-    let (xs, ys, zs) = unzip3 movimentos
-     in (sum xs, sum ys, sum zs)
-
--- Funções de validação
+-- Funções de validação de movimento
 validarMovimento :: Nave -> Posicao -> Either String Nave
 validarMovimento nave (dx, dy, dz) =
     if not (ligado nave)
@@ -98,7 +101,7 @@ validarMovimento nave (dx, dy, dz) =
             let (x, y, z) = posicao nave
                 novaPosicao = (x + dx, y + dy, z + dz)
              in if verificarEspacoPermitido novaPosicao nave
-                    then Right nave { posicao = novaPosicao }
+                    then Right nave{posicao = novaPosicao}
                     else Left "Erro: Movimento fora do espaço permitido!"
 
 verificarEspacoPermitido :: Posicao -> Nave -> Bool
@@ -106,35 +109,43 @@ verificarEspacoPermitido (x, y, z) nave =
     let ((minX, minY, minZ), (maxX, maxY, maxZ)) = espacoPermitido nave
      in x >= minX && x <= maxX && y >= minY && y <= maxY && z >= minZ && z <= maxZ
 
--- Funções de controle da nave
+-- Controle de nave
 ligarNave :: Nave -> Either String Nave
 ligarNave nave =
     if ligado nave
         then Left "Erro: A nave já está ligada!"
-        else Right nave { ligado = True }
+        else Right nave{ligado = True}
 
 desligarNave :: Nave -> Either String Nave
 desligarNave nave =
     if not (ligado nave)
         then Left "Erro: A nave já está desligada!"
-        else Right nave { ligado = False }
+        else Right nave{ligado = False}
 
--- Função para salvar naves
-salvarNaves :: FilePath -> [Nave] -> IO ()
-salvarNaves caminho naves = do
+-- Gravar estados das naves em ficheiro
+gravarNavesFicheiro :: FilePath -> [Nave] -> IO ()
+gravarNavesFicheiro caminho naves = do
     let conteudo = unlines $ map formatarNave naves
     writeFile caminho conteudo
   where
     formatarNave nave =
-        naveId nave ++ " " ++
-        "init (" ++ show (x, y, z) ++ ") " ++
-        (if ligado nave then "1" else "0") ++ " " ++
-        "initspace (" ++ show (minX, minY, minZ) ++ ") (" ++ show (maxX, maxY, maxZ) ++ ")"
+        naveId nave
+            ++ " init "
+            ++ "("
+            ++ formatarPosicao (posicao nave)
+            ++ ") "
+            ++ (if ligado nave then "1" else "0")
+            ++ " initspace "
+            ++ "("
+            ++ formatarPosicao posMin
+            ++ ") "
+            ++ "("
+            ++ formatarPosicao posMax
+            ++ ")"
       where
-        (x, y, z) = posicao nave
-        ((minX, minY, minZ), (maxX, maxY, maxZ)) = espacoPermitido nave
+        (posMin, posMax) = espacoPermitido nave
 
--- Interface com usuário
+-- Mostrar informações da nave
 mostrarNave :: Nave -> IO ()
 mostrarNave nave = do
     putStrLn $ "\nNave ID: " ++ naveId nave
@@ -143,7 +154,8 @@ mostrarNave nave = do
     putStrLn $ "Espaço permitido: " ++ show (espacoPermitido nave)
     putStrLn "----------------------------------------"
 
-menuPrincipal :: IO Int
+-- Menu principal
+menuPrincipal :: IO (Maybe Int)
 menuPrincipal = do
     putStrLn "\n=== Sistema de Controle de Nave Alienígena ==="
     putStrLn "1. Listar todas as naves"
@@ -156,8 +168,9 @@ menuPrincipal = do
     input <- getLine
     return $ readMaybe input
 
-menuAcoes :: Nave -> IO Nave
-menuAcoes nave = do
+-- Menu de ações
+menuAcoes :: Nave -> Registro -> IO Registro
+menuAcoes nave registro = do
     putStrLn "\n=== Menu de Ações ==="
     putStrLn "1. Ligar nave"
     putStrLn "2. Desligar nave"
@@ -168,36 +181,54 @@ menuAcoes nave = do
     opcao <- getLine
     let estadoAntes = nave
     case opcao of
-        "1" -> case ligarNave nave of
-            Left erro -> do
-                putStrLn erro
-                return nave
-            Right naveAtualizada -> do
-                putStrLn "Nave ligada com sucesso!"
-                return naveAtualizada
-        "2" -> case desligarNave nave of
-            Left erro -> do
-                putStrLn erro
-                return nave
-            Right naveAtualizada -> do
-                putStrLn "Nave desligada com sucesso!"
-                return naveAtualizada
+        "1" -> processarAcao "Ligar nave" (ligarNave nave) estadoAntes
+        "2" -> processarAcao "Desligar nave" (desligarNave nave) estadoAntes
         "3" -> do
             putStrLn "Digite o movimento (x y z):"
             input <- getLine
-            let coords = words input
-            case map readMaybe coords of
-                [Just x, Just y, Just z] ->
-                    case validarMovimento nave (x, y, z) of
-                        Left erro -> putStrLn erro >> return nave
-                        Right naveAtualizada -> do
-                            putStrLn "Movimento realizado com sucesso!"
-                            return naveAtualizada
-                _ -> putStrLn "Coordenadas inválidas!" >> return nave
-        "4" -> return nave
-        _ -> putStrLn "Opção inválida!" >> return nave
+            case processarMovimento input nave of
+                Left erro -> do
+                    putStrLn erro
+                    menuAcoes nave registro
+                Right naveAtualizada -> do
+                    putStrLn "Movimento realizado com sucesso!"
+                    -- Atualiza o registro apenas se o movimento for bem-sucedido
+                    menuAcoes naveAtualizada (atualizarRegistro registro "Mover nave" input estadoAntes naveAtualizada) -- Continua no menu de ações
+        "4" -> do
+            mostrarRegistro registro -- Mostra o registro de comandos
+            return registro
+        _ -> do
+            putStrLn "Opção inválida!"
+            menuAcoes nave registro -- Retorna ao menu de ações
+  where
+    processarAcao acao result estadoAntes = case result of
+        Left erro -> do
+            putStrLn erro
+            menuAcoes nave registro -- Retorna ao menu de ações
+        Right naveAtualizada -> do
+            putStrLn "Ação realizada com sucesso!"
+            -- Atualiza o registro apenas se a ação for bem-sucedida
+            menuAcoes naveAtualizada (atualizarRegistro registro acao "" estadoAntes naveAtualizada) -- Continua no menu de ações
+    atualizarRegistro reg acao params antes depois =
+        reg{comandosExecutados = (naveId antes, acao, params, posicao depois) : comandosExecutados reg, estadoFinal = depois}
 
--- Funções principais do programa
+    mostrarRegistro reg = do
+        putStrLn "\nComandos Executados:"
+        mapM_
+            ( \(idNave, acao, params, estado) -> do
+                putStrLn $ "ID: " ++ idNave ++ ", Ação: " ++ acao ++ ", Parâmetros: " ++ params ++ ", Posição: " ++ show estado
+            )
+            (reverse $ comandosExecutados reg)
+
+-- Processar movimento da nave
+processarMovimento :: String -> Nave -> Either String Nave
+processarMovimento input nave = do
+    let coords = words input
+    case mapM readMaybe coords of
+        Just [x, y, z] -> validarMovimento nave (x, y, z)
+        _ -> Left "Coordenadas inválidas! Use o formato: x y z"
+
+-- Executar ações para uma nave específica
 executarAcoesUmaNave :: [Nave] -> IO [Nave]
 executarAcoesUmaNave naves = do
     putStr "Digite o ID da nave: "
@@ -212,11 +243,12 @@ executarAcoesUmaNave naves = do
             registroAtualizado <- menuAcoes nave registroInicial
             return $ map (\n -> if naveId n == id then estadoFinal registroAtualizado else n) naves
 
+-- Executar ações para todas as naves
 executarAcoesTodasNaves :: [Nave] -> IO [Nave]
 executarAcoesTodasNaves naves = do
     putStrLn "\nExecutando ações para todas as naves..."
     foldM
-        (\navesAtuais nave -> do
+        ( \navesAtuais nave -> do
             putStrLn $ "\nExecutando ações para nave " ++ naveId nave
             let registroInicial = Registro [] nave
             registroAtualizado <- menuAcoes nave registroInicial
@@ -225,86 +257,116 @@ executarAcoesTodasNaves naves = do
         naves
         naves
 
+-- Entrada direta de comandos
 entradaDireta :: [Nave] -> IO [Nave]
 entradaDireta naves = do
     putStrLn "\nDigite o comando no formato: ID COMANDO PARAMETROS"
-    putStrLn "Exemplo: nave1 ligar"
-    putStrLn "        nave1 mover 10 20 30"
-    input <- getLine
-    let palavras = words input
-    case palavras of
-        (id : cmd : params) -> case find (\n -> naveId n == id) naves of
-            Nothing -> putStrLn "Nave não encontrada!" >> return naves
-            Just nave -> processarComandoDireto nave cmd params naves
-        _ -> putStrLn "Formato de comando inválido!" >> return naves
+    putStrLn "Exemplo: nave1 acao ligar"
+    putStrLn "Exemplo: nave1 mover 10 20 30"
+    comandosIntroduzidos <- loopEntrada naves []
 
-processarComandoDireto :: Nave -> String -> [String] -> [Nave] -> IO [Nave]
-processarComandoDireto nave cmd params naves = case cmd of
-    "ligar" -> case ligarNave nave of
-        Left erro -> putStrLn erro >> return naves
-        Right naveAtualizada -> do
-            putStrLn "Nave ligada com sucesso!"
-            return $ map (\n -> if naveId n == naveId nave then naveAtualizada else n) naves
-    "desligar" -> case desligarNave nave of
-        Left erro -> putStrLn erro >> return naves
-        Right naveAtualizada -> do
-            putStrLn "Nave desligada com sucesso!"
-            return $ map (\n -> if naveId n == naveId nave then naveAtualizada else n) naves
-    "mover" -> case params of
-        [x, y, z] -> case (readMaybe x, readMaybe y, readMaybe z) of
-            (Just dx, Just dy, Just dz) ->
-                case validarMovimento nave (dx, dy, dz) of
-                    Left erro -> putStrLn erro >> return naves
+    -- Exibir os comandos introduzidos
+    putStrLn "\nInstruções introduzidas:"
+    mapM_ (putStrLn . formatarComando) comandosIntroduzidos
+
+    return naves
+  where
+    loopEntrada :: [Nave] -> [(String, String, String, Posicao)] -> IO [(String, String, String, Posicao)]
+    loopEntrada naves comandos = do
+        putStr "Introduza uma instrução para uma nave ou escreva 'voltar' para voltar ao menu: "
+        hFlush stdout
+        input <- getLine
+
+        if input == "voltar"
+            then return comandos
+            else do
+                let palavras = words input
+                case palavras of
+                    (id : cmd : params) ->
+                        case find (\n -> naveId n == id) naves of
+                            Nothing -> do
+                                putStrLn "Nave não encontrada!"
+                                loopEntrada naves comandos
+                            Just nave -> processarComando nave cmd params comandos
+                    _ -> do
+                        putStrLn "Formato de comando inválido!"
+                        loopEntrada naves comandos
+
+    processarComando :: Nave -> String -> [String] -> [(String, String, String, Posicao)] -> IO [(String, String, String, Posicao)]
+    processarComando nave cmd params comandos = case cmd of
+        "mover" -> case params of
+            [x, y, z] -> case (readMaybe x, readMaybe y, readMaybe z) of
+                (Just dx, Just dy, Just dz) -> do
+                    case validarMovimento nave (dx, dy, dz) of
+                        Left erro -> do
+                            putStrLn erro
+                            loopEntrada naves comandos
+                        Right naveAtualizada -> do
+                            let novaPosicaoFinal = posicao naveAtualizada
+                            let novoComando = (naveId nave, "mover", show (dx, dy, dz), novaPosicaoFinal)
+                            loopEntrada naves (novoComando : comandos)
+                _ -> do
+                    putStrLn "Parâmetros de movimento inválidos!"
+                    loopEntrada naves comandos
+        "acao" -> case params of
+            ["ligar"] -> do
+                case ligarNave nave of
+                    Left erro -> do
+                        putStrLn erro
+                        loopEntrada naves comandos
                     Right naveAtualizada -> do
-                        putStrLn "Movimento realizado com sucesso!"
-                        return $ map (\n -> if naveId n == naveId nave then naveAtualizada else n) naves
-            _ -> putStrLn "Parâmetros de movimento inválidos!" >> return naves
-        _ -> putStrLn "Número incorreto de parâmetros para movimento!" >> return naves
-    "init" -> case params of
-        (posStr : status : rest) -> case lerCoordenadas posStr of
-            Just pos -> do 
-                let naveAtualizada = nave{posicao = pos, ligado = status == "1"}
-                putStrLn "Inicialização da nave realizada com sucesso!"
-                return $ map (\n -> if naveId n == naveId nave then naveAtualizada else n) naves
-            Nothing -> putStrLn "Coordenadas inválidas para inicialização!" >> return naves
-        _ -> putStrLn "Parâmetros insuficientes para inicialização!" >> return naves
-    "initspace" -> case params of
-        (minStr : maxStr : rest) -> case (lerCoordenadas minStr, lerCoordenadas maxStr) of
-            (Just minPos, Just maxPos) -> do
-                let naveAtualizada = nave{espacoPermitido = (minPos, maxPos)}
-                putStrLn "Espaço permitido inicializado com sucesso!"
-                return $ map (\n -> if naveId n == naveId nave then naveAtualizada else n) naves
-            _ -> putStrLn "Coordenadas inválidas para espaço permitido!" >> return naves
-        _ -> putStrLn "Parâmetros insuficientes para espaço permitido!" >> return naves
-    _ -> do
-        putStrLn "Comando desconhecido!"
-        return naves
+                        let novoComando = (naveId nave, "acao", "ligar", posicao naveAtualizada)
+                        loopEntrada naves (novoComando : comandos)
+            ["desligar"] -> do
+                case desligarNave nave of
+                    Left erro -> do
+                        putStrLn erro
+                        loopEntrada naves comandos
+                    Right naveAtualizada -> do
+                        let novoComando = (naveId nave, "acao", "desligar", posicao naveAtualizada)
+                        loopEntrada naves (novoComando : comandos)
+            _ -> do
+                putStrLn "Formato de comando inválido para ação!"
+                loopEntrada naves comandos
+        _ -> do
+            putStrLn "Comando desconhecido!"
+            loopEntrada naves comandos
+
+    formatarComando (idNave, acao, params, estado) =
+        idNave ++ " " ++ acao ++ " " ++ params ++ " posição " ++ show estado
 
 -- Main program loop
 loopPrincipal :: [Nave] -> IO ()
 loopPrincipal naves = do
-    opcao <- menuPrincipal
-    case opcao of
-        1 -> do
-            putStrLn "\nListando todas as naves:"
-            mapM_ mostrarNave naves
+    opcaoMaybe <- menuPrincipal
+    case opcaoMaybe of
+        Nothing -> do
+            putStrLn "Entrada inválida! Por favor digite um número."
             loopPrincipal naves
-        2 -> do
-            navesAtualizadas <- executarAcoesUmaNave naves
-            loopPrincipal navesAtualizadas
-        3 -> do
-            navesAtualizadas <- executarAcoesTodasNaves naves
-            loopPrincipal navesAtualizadas
-        4 -> do
-            navesAtualizadas <- entradaDireta naves
-            loopPrincipal navesAtualizadas
-        5 -> do
-            putStrLn "\nEncerrando o programa..."
-        _ -> do
-            putStrLn "Opção inválida!"
-            loopPrincipal naves
+        Just opcao -> case opcao of
+            1 -> do
+                putStrLn "\nListando todas as naves:"
+                mapM_ mostrarNave naves
+                loopPrincipal naves
+            2 -> do
+                navesAtualizadas <- executarAcoesUmaNave naves
+                loopPrincipal navesAtualizadas
+            3 -> do
+                navesAtualizadas <- executarAcoesTodasNaves naves
+                loopPrincipal navesAtualizadas
+            4 -> do
+                navesAtualizadas <- entradaDireta naves
+                loopPrincipal navesAtualizadas
+            5 -> do
+                putStrLn "\nSalvando estado das naves..."
+                gravarNavesFicheiro "AlienshipSave.txt" naves
+                putStrLn "Estado salvo com sucesso!"
+                putStrLn "Encerrando o programa..."
+            _ -> do
+                putStrLn "Opção inválida! Escolha entre 1 e 5."
+                loopPrincipal naves
 
--- Programa principal
+-- Programa Principal
 main :: IO ()
 main = do
     putStrLn "A carregar arquivo de naves..."
@@ -312,4 +374,3 @@ main = do
     let naves = parseNave conteudo
     putStrLn "Arquivo carregado com sucesso!"
     loopPrincipal naves
-    putStrLn "O estado das naves foi restaurado ao original."  -- Mensagem ao sair
