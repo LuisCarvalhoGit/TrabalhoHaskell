@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
 {-# HLINT ignore "Use <$>" #-}
 {-# HLINT ignore "Eta reduce" #-}
 module Main where
@@ -30,9 +31,12 @@ mesmasPosicoes (x1, y1, z1) (x2, y2, z2) = x1 == x2 && y1 == y2 && z1 == z2
 
 verificarColisao :: [Nave] -> Nave -> Posicao -> Bool
 verificarColisao todasNaves naveAtual novaPosicao =
-    any (\outraNave -> 
-        naveId outraNave /= naveId naveAtual && 
-        mesmasPosicoes novaPosicao (posicao outraNave)) todasNaves
+    any
+        ( \outraNave ->
+            naveId outraNave /= naveId naveAtual
+                && mesmasPosicoes novaPosicao (posicao outraNave)
+        )
+        todasNaves
 
 lerCoordenadas :: String -> Maybe Posicao
 lerCoordenadas str = do
@@ -48,11 +52,30 @@ formatarPosicao :: Posicao -> String
 formatarPosicao (x, y, z) = "(" ++ show x ++ "," ++ show y ++ "," ++ show z ++ ")"
 
 parseNave :: String -> [Nave]
-parseNave conteudo = map parseLinha (lines conteudo)
+parseNave conteudo = foldl verificarColisoes [] (map parseLinha (lines conteudo))
   where
+    defaultPosition = (0, 0, 0)
+
+    -- Parse a single line into a Nave
     parseLinha linha = case words linha of
-        (id : comandos) -> processarComandos (Nave id (0, 0, 0) False ((0, 0, 0), (100, 100, 100))) comandos
-        _ -> Nave "ERRO" (0, 0, 0) False ((0, 0, 0), (100, 100, 100))
+        (id : comandos) -> processarComandos (Nave id defaultPosition False ((0, 0, 0), (100, 100, 100))) comandos
+        _ -> Nave "ERRO" defaultPosition False ((0, 0, 0), (100, 100, 100))
+
+    -- Check for collisions and assign alternate positions
+    verificarColisoes :: [Nave] -> Nave -> [Nave]
+    verificarColisoes naves naveAtual
+        | any (mesmasPosicoes (posicao naveAtual) . posicao) naves =
+            -- If there's a collision, find the next available position
+            let novaPos = encontrarProximaPosicaoLivre naves (posicao naveAtual)
+             in naveAtual{posicao = novaPos} : naves
+        | otherwise = naveAtual : naves
+
+    -- Find the next available position by incrementing coordinates
+    encontrarProximaPosicaoLivre :: [Nave] -> Posicao -> Posicao
+    encontrarProximaPosicaoLivre naves pos@(x, y, z) =
+        if any (mesmasPosicoes pos . posicao) naves
+            then encontrarProximaPosicaoLivre naves (x + 1, y + 1, z + 1)
+            else pos
 
     processarComandos :: Nave -> [String] -> Nave
     processarComandos nave [] = nave
@@ -102,9 +125,10 @@ validarMovimento todasNaves nave (dx, dy, dz) =
                 novaPosicao = (x + dx, y + dy, z + dz)
             if not (verificarEspacoPermitido novaPosicao nave)
                 then Left "Erro: Movimento fora do espaço permitido!"
-                else if verificarColisao todasNaves nave novaPosicao
-                    then Left "Erro: Movimento impossível - colisão detectada com outra nave!"
-                    else Right nave{posicao = novaPosicao}
+                else
+                    if verificarColisao todasNaves nave novaPosicao
+                        then Left "Erro: Movimento impossível - colisão detectada com outra nave!"
+                        else Right nave{posicao = novaPosicao}
 
 verificarEspacoPermitido :: Posicao -> Nave -> Bool
 verificarEspacoPermitido (x, y, z) nave =
@@ -200,7 +224,7 @@ menuAcoes todasNaves nave registro = do
         Right naveAtualizada -> do
             putStrLn "Ação realizada com sucesso!"
             menuAcoes todasNaves naveAtualizada (atualizarRegistro registro acao "" estadoAntes naveAtualizada)
-    
+
     atualizarRegistro reg acao params antes depois =
         reg{comandosExecutados = (naveId antes, acao, params, posicao depois) : comandosExecutados reg, estadoFinal = depois}
 
