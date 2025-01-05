@@ -5,31 +5,37 @@
 {-# HLINT ignore "Avoid lambda" #-}
 module Main where
 
+-- Importação de bibliotecas necessárias
 import Control.Monad
 import Data.List
 import Data.Maybe
 import System.IO
 import Text.Read (readMaybe)
 
-type Posicao = (Int, Int, Int)
-type Espaco = (Posicao, Posicao)
+-- Tipos personalizados para representar posições e espaços tridimensionais
+type Posicao = (Int, Int, Int) -- Representa uma posição no espaço 3D (x,y,z)
+type Espaco = (Posicao, Posicao) -- Representa um espaço definido por dois pontos (min, max)
 
+-- Estrutura de dados que representa uma nave alienígena
 data Nave = Nave
-    { naveId :: String
-    , posicao :: Posicao
-    , ligado :: Bool
-    , espacoPermitido :: Espaco
+    { naveId :: String -- Identificador único da nave
+    , posicao :: Posicao -- Posição atual (x,y,z)
+    , ligado :: Bool -- Estado da nave (ligado/desligado)
+    , espacoPermitido :: Espaco -- Espaço permitido para a nave se mover
     }
     deriving (Show, Eq)
 
+-- Estrutura de dados que representa um registro de ações realizadas em uma nave
 data Registo = Registo
-    { comandosExecutados :: [(String, String, String, Posicao)]
-    , estadoFinal :: Nave
+    { comandosExecutados :: [(String, String, String, Posicao)] -- Lista de comandos: (ID, ação, parâmetros, posição)
+    , estadoFinal :: Nave -- Estado final da nave após a execução dos comandos
     }
 
+-- Verifica se duas posições são iguais no espaço 3D
 mesmasPosicoes :: Posicao -> Posicao -> Bool
 mesmasPosicoes (x1, y1, z1) (x2, y2, z2) = x1 == x2 && y1 == y2 && z1 == z2
 
+-- Verifica se há colisão entre naves em uma determinada posição
 verificarColisao :: [Nave] -> Nave -> Posicao -> Bool
 verificarColisao todasNaves naveAtual novaPosicao =
     any
@@ -39,25 +45,28 @@ verificarColisao todasNaves naveAtual novaPosicao =
         )
         todasNaves
 
+-- Converte uma string de coordenadas "(x,y,z)" em um tipo Posicao
 lerCoordenadas :: String -> Maybe Posicao
 lerCoordenadas str = do
-    let cleanStr = filter (`notElem` "()") str
-    let parts = words $ map (\c -> if c == ',' then ' ' else c) cleanStr
+    let cleanStr = filter (`notElem` "()") str -- Remove parênteses
+    let parts = words $ map (\c -> if c == ',' then ' ' else c) cleanStr -- Substitui vírgulas por espaços
     case parts of
         [x, y, z] -> case (readMaybe x, readMaybe y, readMaybe z) of
             (Just x', Just y', Just z') -> Just (x', y', z')
             _ -> Nothing
         _ -> Nothing
 
+-- Converte uma Posicao em uma string formatada "(x,y,z)"
 formatarPosicao :: Posicao -> String
 formatarPosicao (x, y, z) = "(" ++ show x ++ "," ++ show y ++ "," ++ show z ++ ")"
 
+-- Função que lê o conteúdo do arquivo de texto e retorna uma lista de naves
 parseNave :: String -> [Nave]
 parseNave conteudo = foldl verificarColisoes [] (map parseLinha (lines conteudo))
   where
-    posicaoPadrao = (0, 0, 0)
+    posicaoPadrao = (0, 0, 0) -- Posição inicial padrão
 
-    -- Parse numa unica linha
+    -- Processa uma única linha do arquivo de configuração
     parseLinha linha = case words linha of
         (id : comandos) -> processarComandos (Nave id posicaoPadrao False ((0, 0, 0), (100, 100, 100))) comandos
         _ -> Nave "ERRO" posicaoPadrao False ((0, 0, 0), (100, 100, 100))
@@ -78,6 +87,7 @@ parseNave conteudo = foldl verificarColisoes [] (map parseLinha (lines conteudo)
             then encontrarProximaPosicaoLivre naves (x + 1, y + 1, z + 1)
             else (x, y, z)
 
+    -- Processa os comandos de inicialização da nave
     processarComandos :: Nave -> [String] -> Nave
     processarComandos nave [] = nave
     processarComandos nave (cmd : args) =
@@ -117,6 +127,7 @@ parseNave conteudo = foldl verificarColisoes [] (map parseLinha (lines conteudo)
                 _ -> nave
          in processarComandos updatedNave args
 
+-- Valida se um movimento é permitido para uma nave
 validarMovimento :: [Nave] -> Nave -> Posicao -> Either String Nave
 validarMovimento todasNaves nave (dx, dy, dz) =
     if not (ligado nave)
@@ -131,23 +142,27 @@ validarMovimento todasNaves nave (dx, dy, dz) =
                         then Left "Erro: Movimento impossível - colisão detectada com outra nave!"
                         else Right nave{posicao = novaPosicao}
 
+-- Verifica se uma posição está dentro do espaço permitido da nave
 verificarEspacoPermitido :: Posicao -> Nave -> Bool
 verificarEspacoPermitido (x, y, z) nave =
     let ((minX, minY, minZ), (maxX, maxY, maxZ)) = espacoPermitido nave
      in x >= minX && x <= maxX && y >= minY && y <= maxY && z >= minZ && z <= maxZ
 
+-- Liga uma nave se ela estiver desligada
 ligarNave :: Nave -> Either String Nave
 ligarNave nave =
     if ligado nave
         then Left "Erro: A nave já está ligada!"
         else Right nave{ligado = True}
 
+-- Desliga uma nave se ela estiver ligada
 desligarNave :: Nave -> Either String Nave
 desligarNave nave =
     if not (ligado nave)
         then Left "Erro: A nave já está desligada!"
         else Right nave{ligado = False}
 
+-- Grava o estado atual das naves em um arquivo de texto
 gravarNavesFicheiro :: FilePath -> [Nave] -> IO ()
 gravarNavesFicheiro caminho naves = do
     let conteudo = unlines $ map formatarNave naves
@@ -166,6 +181,7 @@ gravarNavesFicheiro caminho naves = do
       where
         (posMin, posMax) = espacoPermitido nave
 
+-- Exibe informações detalhadas de uma nave
 mostrarNave :: Nave -> IO ()
 mostrarNave nave = do
     putStrLn $ "\nNave ID: " ++ naveId nave
@@ -174,6 +190,7 @@ mostrarNave nave = do
     putStrLn $ "Espaço permitido: " ++ show (espacoPermitido nave)
     putStrLn "----------------------------------------"
 
+-- Exibe o menu principal e retorna a opção escolhida
 menuPrincipal :: IO (Maybe Int)
 menuPrincipal = do
     putStrLn "\n=== Sistema de Controle de Nave Alienígena ==="
@@ -187,6 +204,7 @@ menuPrincipal = do
     input <- getLine
     return $ readMaybe input
 
+-- Exibe o menu de ações para uma nave específica
 menuAcoes :: [Nave] -> Nave -> Registo -> IO Registo
 menuAcoes todasNaves nave registo = do
     putStrLn "\n=== Menu de Ações ==="
@@ -218,6 +236,7 @@ menuAcoes todasNaves nave registo = do
             putStrLn "Opção inválida!"
             menuAcoes todasNaves nave registo
   where
+    -- Processa uma ação genérica (ligar/desligar)
     processarAcao acao result estadoAntes = case result of
         Left erro -> do
             putStrLn erro
@@ -226,6 +245,7 @@ menuAcoes todasNaves nave registo = do
             putStrLn "Ação realizada com sucesso!"
             menuAcoes todasNaves naveAtualizada (atualizarRegisto registo acao "" estadoAntes naveAtualizada)
 
+    -- Atualiza o registro de comandos
     atualizarRegisto reg acao params antes depois =
         reg{comandosExecutados = (naveId antes, acao, params, posicao depois) : comandosExecutados reg, estadoFinal = depois}
 
@@ -237,6 +257,7 @@ menuAcoes todasNaves nave registo = do
             )
             (reverse $ comandosExecutados reg)
 
+-- Processa um movimento com base na entrada do usuário
 processarMovimento :: [Nave] -> String -> Nave -> Either String Nave
 processarMovimento todasNaves input nave = do
     let coords = words input
@@ -244,6 +265,7 @@ processarMovimento todasNaves input nave = do
         Just [x, y, z] -> validarMovimento todasNaves nave (x, y, z)
         _ -> Left "Coordenadas inválidas! Use o formato: x y z"
 
+-- Executa ações para uma nave específica
 executarAcoesUmaNave :: [Nave] -> IO [Nave]
 executarAcoesUmaNave naves = do
     putStr "Digite o ID da nave: "
@@ -258,6 +280,7 @@ executarAcoesUmaNave naves = do
             registroAtualizado <- menuAcoes naves nave registroInicial
             return $ map (\n -> if naveId n == id then estadoFinal registroAtualizado else n) naves
 
+-- Executa ações para todas as naves sequencialmente
 executarAcoesTodasNaves :: [Nave] -> IO [Nave]
 executarAcoesTodasNaves naves = do
     putStrLn "\nExecutando ações para todas as naves..."
@@ -271,6 +294,7 @@ executarAcoesTodasNaves naves = do
         naves
         naves
 
+-- Entrada direta de comandos para uma ou mais naves
 entradaDireta :: [Nave] -> IO [Nave]
 entradaDireta naves = do
     putStrLn "\nDigite o comando no formato: ID COMANDO PARAMETROS"
@@ -282,12 +306,14 @@ entradaDireta naves = do
     let navesAtualizadas = executarComandos naves comandosIntroduzidos
     return navesAtualizadas
   where
+    -- Loop para entrada de comandos
     loopEntrada :: [Nave] -> [(String, String, String, Posicao)] -> IO [(String, String, String, Posicao)]
     loopEntrada naves comandos = do
         putStr "Introduza uma instrução para uma nave ou escreva 'voltar' para voltar ao menu: "
         hFlush stdout
         input <- getLine
 
+        -- Verifica se o usuário deseja voltar ao menu principal
         if input == "voltar"
             then return comandos
             else do
@@ -303,6 +329,7 @@ entradaDireta naves = do
                         putStrLn "Formato de comando inválido!"
                         loopEntrada naves comandos
 
+    -- Processa um comando introduzido pelo usuário
     processarComando :: Nave -> String -> [String] -> [(String, String, String, Posicao)] -> IO [(String, String, String, Posicao)]
     processarComando nave cmd params comandos = case cmd of
         "mover" -> case params of
@@ -348,6 +375,7 @@ entradaDireta naves = do
     formatarComando (idNave, acao, params, estado) =
         idNave ++ " " ++ acao ++ " " ++ params ++ " posição " ++ show estado
 
+    -- Executa uma lista de comandos em uma lista de naves
     executarComandos :: [Nave] -> [(String, String, String, Posicao)] -> [Nave]
     executarComandos naves comandos =
         foldl
@@ -373,10 +401,12 @@ entradaDireta naves = do
             naves
             comandos
 
+    -- Atualiza uma nave na lista de naves
     atualizarNave :: [Nave] -> Nave -> [Nave]
     atualizarNave naves naveAtualizada =
         map (\n -> if naveId n == naveId naveAtualizada then naveAtualizada else n) naves
 
+-- Loop principal do programa
 loopPrincipal :: [Nave] -> IO ()
 loopPrincipal naves = do
     opcaoMaybe <- menuPrincipal
@@ -407,6 +437,7 @@ loopPrincipal naves = do
                 putStrLn "Opção inválida! Escolha entre 1 e 5."
                 loopPrincipal naves
 
+-- Função principal que carrega o arquivo de naves e inicia o loop principal
 main :: IO ()
 main = do
     putStrLn "A carregar arquivo de naves..."
