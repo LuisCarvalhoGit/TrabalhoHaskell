@@ -2,6 +2,7 @@
 
 {-# HLINT ignore "Use <$>" #-}
 {-# HLINT ignore "Eta reduce" #-}
+{-# HLINT ignore "Avoid lambda" #-}
 module Main where
 
 import Control.Monad
@@ -54,28 +55,28 @@ formatarPosicao (x, y, z) = "(" ++ show x ++ "," ++ show y ++ "," ++ show z ++ "
 parseNave :: String -> [Nave]
 parseNave conteudo = foldl verificarColisoes [] (map parseLinha (lines conteudo))
   where
-    defaultPosition = (0, 0, 0)
+    posicaoPadrao = (0, 0, 0)
 
-    -- Parse a single line into a Nave
+    -- Parse numa unica linha
     parseLinha linha = case words linha of
-        (id : comandos) -> processarComandos (Nave id defaultPosition False ((0, 0, 0), (100, 100, 100))) comandos
-        _ -> Nave "ERRO" defaultPosition False ((0, 0, 0), (100, 100, 100))
+        (id : comandos) -> processarComandos (Nave id posicaoPadrao False ((0, 0, 0), (100, 100, 100))) comandos
+        _ -> Nave "ERRO" posicaoPadrao False ((0, 0, 0), (100, 100, 100))
 
-    -- Check for collisions and assign alternate positions
+    -- Verificar colisões e encontrar uma nova posição se necessário
     verificarColisoes :: [Nave] -> Nave -> [Nave]
     verificarColisoes naves naveAtual
         | any (mesmasPosicoes (posicao naveAtual) . posicao) naves =
-            -- If there's a collision, find the next available position
+            -- Se a posição da nave atual já está ocupada, encontrar uma nova posição
             let novaPos = encontrarProximaPosicaoLivre naves (posicao naveAtual)
              in naveAtual{posicao = novaPos} : naves
         | otherwise = naveAtual : naves
 
-    -- Find the next available position by incrementing coordinates
+    -- Encontrar a próxima posição livre
     encontrarProximaPosicaoLivre :: [Nave] -> Posicao -> Posicao
-    encontrarProximaPosicaoLivre naves pos@(x, y, z) =
-        if any (mesmasPosicoes pos . posicao) naves
+    encontrarProximaPosicaoLivre naves (x, y, z) =
+        if any (\nave -> mesmasPosicoes (x, y, z) (posicao nave)) naves
             then encontrarProximaPosicaoLivre naves (x + 1, y + 1, z + 1)
-            else pos
+            else (x, y, z)
 
     processarComandos :: Nave -> [String] -> Nave
     processarComandos nave [] = nave
@@ -187,7 +188,7 @@ menuPrincipal = do
     return $ readMaybe input
 
 menuAcoes :: [Nave] -> Nave -> Registo -> IO Registo
-menuAcoes todasNaves nave registro = do
+menuAcoes todasNaves nave registo = do
     putStrLn "\n=== Menu de Ações ==="
     putStrLn "1. Ligar nave"
     putStrLn "2. Desligar nave"
@@ -206,26 +207,26 @@ menuAcoes todasNaves nave registro = do
             case processarMovimento todasNaves input nave of
                 Left erro -> do
                     putStrLn erro
-                    menuAcoes todasNaves nave registro
+                    menuAcoes todasNaves nave registo
                 Right naveAtualizada -> do
                     putStrLn "Movimento realizado com sucesso!"
-                    menuAcoes todasNaves naveAtualizada (atualizarRegistro registro "Mover nave" input estadoAntes naveAtualizada)
+                    menuAcoes todasNaves naveAtualizada (atualizarRegisto registo "Mover nave" input estadoAntes naveAtualizada)
         "4" -> do
-            mostrarRegistro registro
-            return registro
+            mostrarRegistro registo
+            return registo
         _ -> do
             putStrLn "Opção inválida!"
-            menuAcoes todasNaves nave registro
+            menuAcoes todasNaves nave registo
   where
     processarAcao acao result estadoAntes = case result of
         Left erro -> do
             putStrLn erro
-            menuAcoes todasNaves nave registro
+            menuAcoes todasNaves nave registo
         Right naveAtualizada -> do
             putStrLn "Ação realizada com sucesso!"
-            menuAcoes todasNaves naveAtualizada (atualizarRegistro registro acao "" estadoAntes naveAtualizada)
+            menuAcoes todasNaves naveAtualizada (atualizarRegisto registo acao "" estadoAntes naveAtualizada)
 
-    atualizarRegistro reg acao params antes depois =
+    atualizarRegisto reg acao params antes depois =
         reg{comandosExecutados = (naveId antes, acao, params, posicao depois) : comandosExecutados reg, estadoFinal = depois}
 
     mostrarRegistro reg = do
